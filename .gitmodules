@@ -1,0 +1,9 @@
+[submodule "block-engine-protos"]
+	path = block-engine-protos
+	url = https://github.com/Prophet-Solutions/block-engine-protos
+[submodule "geyser-protos"]
+	path = geyser-protos
+	url = https://github.com/Prophet-Solutions/geyser-protos
+[submodule "yellowstone-geyser-protos"]
+	path = yellowstone-geyser-protos
+	url = https://github.com/Prophet-Solutions/yellowstone-geyser-protos
