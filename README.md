@@ -3,7 +3,6 @@
 ![Jito](https://jito-labs.gitbook.io/~gitbook/image?url=https%3A%2F%2F3427002662-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252FHrQ5xfEkhvrbX39awm20%252Fuploads%252FDqQ3x4u1Pe1QPqQ0g9UD%252Fjlabscover.png%3Falt%3Dmedia%26token%3D218ee3d8-f5b2-4692-9146-cbcf1e8af359&width=1248&dpr=2&quality=100&sign=8ccedc4a&sv=1)
 
 [![Go](https://img.shields.io/badge/Go-1.22.5-blue.svg)](https://golang.org/)
-[![Go Report Card](https://goreportcard.com/badge/github.com/Prophet-Solutions/jito-go)](https://goreportcard.com/report/github.com/Prophet-Solutions/jito-go)
 [![gRPC](https://img.shields.io/badge/gRPC-1.65.0-blue.svg)](https://grpc.io/)
 [![Solana](https://img.shields.io/badge/Solana-Blockchain-green.svg)](https://github.com/gagliardetto/solana-go)
 
