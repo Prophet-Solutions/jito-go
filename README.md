@@ -34,6 +34,90 @@ To install the package, run:
 go get github.com/Prophet-Solutions/jito-go
 ```
 
+# Guide to Updating PB Files from Proto Files
+
+This guide outlines the steps to update `.pb` files generated from `.proto` files stored in various repository submodules. Follow these instructions to ensure a smooth update process.
+
+## Repositories
+
+The `.proto` files are stored in the following repository submodules:
+
+- [block-engine-protos](https://github.com/Prophet-Solutions/block-engine-protos)
+- [geyser-protos](https://github.com/Prophet-Solutions/geyser-protos)
+- [yellowstone-geyser-protos](https://github.com/Prophet-Solutions/yellowstone-geyser-protos)
+
+## Update Process
+
+### Step 1: Install Protobuf Compiler
+
+Ensure you have the protobuf compiler installed. Below are the instructions for macOS, Windows, and Linux.
+
+#### macOS
+
+1. Open Terminal.
+2. Install Homebrew if not already installed:
+    ```bash
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    ```
+3. Install protobuf:
+    ```bash
+    brew install protobuf
+    ```
+
+#### Windows
+
+1. Download the protobuf release from [GitHub](https://github.com/protocolbuffers/protobuf/releases).
+2. Extract the downloaded zip file.
+3. Add the `bin` directory of the extracted folder to your system's `PATH`.
+
+#### Linux
+
+1. Open Terminal.
+2. Install protobuf using your package manager. For example, on Ubuntu:
+    ```bash
+    sudo apt-get install -y protobuf-compiler
+    ```
+
+### Step 2: Retrieve New Proto Files
+
+1. Update the submodules to get the latest `.proto` files:
+    ```bash
+    git submodule update --remote
+    ```
+
+### Step 3: Generate PB Files
+
+Run the following `.sh` scripts to generate the `.pb` files from the `.proto` files:
+
+```bash
+./scripts/gen-block-engine-protos.sh
+./scripts/gen-geyser-protos.sh
+./scripts/gen-yellowstone-geyser-protos.sh
+```
+
+### Step 4: Commit and Push Changes
+
+1. Stage the changes:
+    ```bash
+    git add .
+    ```
+2. Commit the changes with a message, including the new version number:
+    ```bash
+    git commit -m "Updated PB files to match proto version <versionNumber>"
+    ```
+3. Push the changes to the repository:
+    ```bash
+    git push
+    ```
+
+### Step 5: Open a Pull Request
+
+1. Open a new pull request (PR) to merge the changes into the main branch if the latest version isn't already pushed.
+
+### Step 6: Publish a New Release
+
+Create a new release to use the latest version in `jito-go`.
+
 ## Usage
 
 ### Relayer
@@ -292,6 +376,11 @@ ports,
 }
 ```
 
+## Disclaimer
+
+This library is not affiliated with Jito Labs.
+This library is not supported by Jito Labs but by the community and repo owners.
+
 ## Resources
 
 - [Jito Gitbook](https://jito-labs.gitbook.io)
@@ -303,45 +392,3 @@ ports,
 
 - Implement Geyser gRPC: [Geyser gRPC Plugin](https://github.com/jito-foundation/geyser-grpc-plugin)
 - Implement YellowStone Geyser gRPC: [YellowStone Geyser gRPC](https://github.com/rpcpool/yellowstone-grpc)
-
-## Dependencies
-
-The following dependencies are used in this project:
-
-- [filippo.io/edwards25519 v1.0.0-rc.1](https://pkg.go.dev/filippo.io/edwards25519)
-- [github.com/Prophet-Solutions/block-engine-protos v1.0.0](https://github.com/Prophet-Solutions/block-engine-protos)
-- [github.com/Prophet-Solutions/geyser-protos v1.0.0](https://github.com/Prophet-Solutions/geyser-protos)
-- [github.com/Prophet-Solutions/yellowstone-geyser-protos v1.0.1](https://github.com/Prophet-Solutions/yellowstone-geyser-protos)
-- [github.com/andres-erbsen/clock v0.0.0-20160526145045-9e14626cd129](https://github.com/andres-erbsen/clock)
-- [github.com/blendle/zapdriver v1.3.1](https://github.com/blendle/zapdriver)
-- [github.com/davecgh/go-spew v1.1.1](https://github.com/davecgh/go-spew)
-- [github.com/fatih/color v1.9.0](https://github.com/fatih/color)
-- [github.com/gagliardetto/binary v0.8.0](https://github.com/gagliardetto/binary)
-- [github.com/gagliardetto/solana-go v1.11.0](https://github.com/gagliardetto/solana-go)
-- [github.com/gagliardetto/treeout v0.1.4](https://github.com/gagliardetto/treeout)
-- [github.com/google/uuid v1.6.0](https://github.com/google/uuid)
-- [github.com/json-iterator/go v1.1.12](https://github.com/json-iterator/go)
-- [github.com/klauspost/compress v1.13.6](https://github.com/klauspost/compress)
-- [github.com/logrusorgru/aurora v2.0.3+incompatible](https://github.com/logrusorgru/aurora)
-- [github.com/mattn/go-colorable v0.1.4](https://github.com/mattn/go-colorable)
-- [github.com/mattn/go-isatty v0.0.11](https://github.com/mattn/go-isatty)
-- [github.com/mitchellh/go-testing-interface v1.14.1](https://github.com/mitchellh/go-testing-interface)
-- [github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd](https://github.com/modern-go/concurrent)
-- [github.com/modern-go/reflect2 v1.0.2](https://github.com/modern-go/reflect2)
-- [github.com/mostynb/zstdpool-freelist v0.0.0-20201229113212-927304c0c3b1](https://github.com/mostynb/zstdpool-freelist)
-- [github.com/mr-tron/base58 v1.2.0](https://github.com/mr-tron/base58)
-- [github.com/streamingfast/logging v0.0.0-20230608130331-f22c91403091](https://github.com/streamingfast/logging)
-- [go.mongodb.org/mongo-driver v1.16.0](https://go.mongodb.org/mongo-driver)
-- [go.uber.org/atomic v1.7.0](https://go.uber.org/atomic)
-- [go.uber.org/multierr v1.6.0](https://go.uber.org/multierr)
-- [go.uber.org/ratelimit v0.2.0](https://go.uber.org/ratelimit)
-- [go.uber.org/zap v1.21.0](https://go.uber.org/zap)
-- [golang.org/x/crypto v0.23.0](https://golang.org/x/crypto)
-- [golang.org/x/net v0.25.0](https://golang.org/x/net)
-- [golang.org/x/sys v0.20.0](https://golang.org/x/sys)
-- [golang.org/x/term v0.20.0](https://golang.org/x/term)
-- [golang.org/x/text v0.15.0](https://golang.org/x/text)
-- [golang.org/x/time v0.0.0-20191024005414-555d28b269f0](https://golang.org/x/time)
-- [google.golang.org/genproto/googleapis/rpc v0.0.0-20240722135656-d784300faade](https://google.golang.org/genproto/googleapis/rpc)
-- [google.golang.org/grpc v1.65.0](https://google.golang.org/grpc)
-- [google.golang.org/protobuf v1.34.2](https://google.golang.org/protobuf)
