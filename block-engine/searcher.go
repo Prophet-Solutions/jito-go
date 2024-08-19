@@ -43,18 +43,20 @@ func NewSearcherClient(
 		if err = authService.AuthenticateAndRefresh(auth_pb.Role_SEARCHER); err != nil {
 			return nil, err
 		}
+	} else {
+		authService = &block_engine_pkg.AuthenticationService{
+			GRPCCtx: ctx,
+		}
 	}
 
 	// Subscribe to bundle results if authentication is set up
 	var subBundleRes jito_pb.SearcherService_SubscribeBundleResultsClient
-	if authService != nil {
-		subBundleRes, err = searcherService.SubscribeBundleResults(
-			authService.GRPCCtx,
-			&jito_pb.SubscribeBundleResultsRequest{},
-		)
-		if err != nil {
-			return nil, fmt.Errorf("could not perform bundle results subscription: %w", err)
-		}
+	subBundleRes, err = searcherService.SubscribeBundleResults(
+		authService.GRPCCtx,
+		&jito_pb.SubscribeBundleResultsRequest{},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("could not perform bundle results subscription: %w", err)
 	}
 
 	// Return the initialized SearcherClient

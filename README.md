@@ -391,4 +391,4 @@ This library is not supported by Jito Labs but by the community and repo owners.
 ## To-Do
 
 - Implement Geyser gRPC: [Geyser gRPC Plugin](https://github.com/jito-foundation/geyser-grpc-plugin)
-- Implement YellowStone Geyser gRPC: [YellowStone Geyser gRPC](https://github.com/rpcpool/yellowstone-grpc)
+- Implement YellowStone Geyser gRPC: [YellowStone Geyser gRPC](https://github.com/rpcpool/yellowstone-grpc) ✅
