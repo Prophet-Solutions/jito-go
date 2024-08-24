@@ -37,9 +37,9 @@ func NewClient(
 
 	// Return the YellowstoneGeyserClient with the established connection.
 	return &YellowstoneGeyserClient{
-		GRPCConn:           conn,
-		Client:             pb.NewGeyserClient(conn),
-		StreamSubscription: nil,
+		GRPCConn: conn,
+		Client:   pb.NewGeyserClient(conn),
+		Stream:   nil,
 	}, nil
 }
 
@@ -179,7 +179,7 @@ func (gc *YellowstoneGeyserClient) Subscribe(
 	accountOwnersFilter []solana.PublicKey,
 	transactionsAccountsInclude []solana.PublicKey,
 	transactionsAccountsExclude []solana.PublicKey,
-) (pb.Geyser_SubscribeClient, error) {
+) error {
 	// Create an empty subscription request.
 	var subscription pb.SubscribeRequest
 
@@ -194,7 +194,7 @@ func (gc *YellowstoneGeyserClient) Subscribe(
 		jsonData := []byte(*jsonInput)
 		err := json.Unmarshal(jsonData, &subscription)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	} else {
 		// If no JSON is provided, start with an empty subscription.
@@ -280,18 +280,18 @@ func (gc *YellowstoneGeyserClient) Subscribe(
 	// Open a gRPC stream for the subscription.
 	stream, err := gc.Client.Subscribe(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Send the subscription request to the server.
 	err = stream.Send(&subscription)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Store the subscription request in the client.
-	gc.StreamSubscription = &subscription
+	gc.Stream = &stream
 
 	// Return the stream for receiving updates.
-	return stream, nil
+	return nil
 }
