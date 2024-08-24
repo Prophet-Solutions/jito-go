@@ -291,6 +291,7 @@ func (gc *YellowstoneGeyserClient) Subscribe(
 
 	// Store the subscription request in the client.
 	gc.Stream = &stream
+	gc.StreamSubscription = &subscription
 
 	// Return the stream for receiving updates.
 	return nil

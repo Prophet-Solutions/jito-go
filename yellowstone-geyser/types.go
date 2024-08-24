@@ -8,7 +8,8 @@ import (
 // YellowstoneGeyserClient is the main client struct that holds the gRPC connection
 // and the GeyserClient for communicating with the Yellowstone Geyser service.
 type YellowstoneGeyserClient struct {
-	GRPCConn *grpc.ClientConn
-	Stream   *pb.Geyser_SubscribeClient
-	Client   pb.GeyserClient
+	GRPCConn           *grpc.ClientConn
+	Stream             *pb.Geyser_SubscribeClient
+	StreamSubscription *pb.SubscribeRequest
+	Client             pb.GeyserClient
 }
