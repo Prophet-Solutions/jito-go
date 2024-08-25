@@ -2,56 +2,98 @@ package yellowstone_geyser
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
+	"slices"
+	"sync"
 
 	"github.com/Prophet-Solutions/jito-go/pkg"
 	pb "github.com/Prophet-Solutions/yellowstone-geyser-protos/geyser"
-	"github.com/gagliardetto/solana-go"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 )
 
-// NewClient creates and returns a new YellowstoneGeyserClient.
-// It establishes a gRPC connection to the Yellowstone Geyser service using the provided address and options.
-//
-// Parameters:
-// - ctx: The context for managing the connection lifecycle.
-// - grpcAddr: The address of the gRPC server.
-// - opts: Optional gRPC dial options for customizing the connection.
-//
-// Returns:
-// - A pointer to YellowstoneGeyserClient if successful, or an error if the connection fails.
 func NewClient(
 	ctx context.Context,
 	grpcAddr string,
 	opts ...grpc.DialOption,
-) (*YellowstoneGeyserClient, error) {
-	// Channel to receive errors during the connection establishment.
-	chErr := make(chan error)
-
+) (*GeyserClient, error) {
 	// Establish the gRPC connection using the provided context, address, and options.
-	conn, err := pkg.CreateGRPCConnection(ctx, chErr, grpcAddr, opts...)
+	conn, err := pkg.CreateGRPCConnection(ctx, nil, grpcAddr, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	// Return the YellowstoneGeyserClient with the established connection.
-	return &YellowstoneGeyserClient{
+	geyserClient := pb.NewGeyserClient(conn)
+	if geyserClient == nil {
+		return nil, fmt.Errorf("failed to create Geyser Client")
+	}
+
+	subscribe, err := geyserClient.Subscribe(ctx, grpc.MaxCallRecvMsgSize(16*1024*1024), grpc.MaxCallSendMsgSize(16*1024*1024))
+	if err != nil {
+		return nil, err
+	}
+
+	return &GeyserClient{
 		GRPCConn: conn,
-		Client:   pb.NewGeyserClient(conn),
-		Stream:   nil,
+		Ctx:      ctx,
+		Client:   geyserClient,
+		Streams:  sync.Map{},
+		DefaultStreamClient: &StreamClient{
+			SubscribeClient: subscribe,
+			Ctx:             ctx,
+			UpdateCh:        make(chan *pb.SubscribeUpdate, 100),
+			ErrCh:           make(chan error, 10),
+		},
+		ErrCh: make(chan error, 10),
 	}, nil
 }
 
-// GetBlockHeight retrieves the current block height from the Geyser service.
-//
-// Parameters:
-// - ctx: The context for managing the request lifecycle.
-// - commitment: The commitment level to use for the request.
-//
-// Returns:
-// - The response containing the block height, or an error if the request fails.
-func (gc *YellowstoneGeyserClient) GetBlockHeight(
+func (c *GeyserClient) NewSubscribeClient(ctx context.Context, clientName string) error {
+	stream, err := c.Client.Subscribe(ctx)
+	if err != nil {
+		return err
+	}
+
+	streamClient := &StreamClient{
+		Ctx:             ctx,
+		SubscribeClient: stream,
+		SubscribeRequest: &pb.SubscribeRequest{
+			Accounts:           make(map[string]*pb.SubscribeRequestFilterAccounts),
+			Slots:              make(map[string]*pb.SubscribeRequestFilterSlots),
+			Transactions:       make(map[string]*pb.SubscribeRequestFilterTransactions),
+			TransactionsStatus: make(map[string]*pb.SubscribeRequestFilterTransactions),
+			Blocks:             make(map[string]*pb.SubscribeRequestFilterBlocks),
+			BlocksMeta:         make(map[string]*pb.SubscribeRequestFilterBlocksMeta),
+			Entry:              make(map[string]*pb.SubscribeRequestFilterEntry),
+			AccountsDataSlice:  make([]*pb.SubscribeRequestAccountsDataSlice, 0),
+		},
+		UpdateCh: make(chan *pb.SubscribeUpdate, 100), // Buffer channel for better performance
+		ErrCh:    make(chan error, 10),                // Buffer error channel
+	}
+
+	c.Streams.Store(clientName, streamClient)
+	go streamClient.listen()
+
+	return nil
+}
+
+// listen starts listening for responses and errors.
+func (s *StreamClient) listen() {
+	for {
+		select {
+		case <-s.Ctx.Done():
+			return
+		default:
+			recv, err := s.SubscribeClient.Recv()
+			if err != nil {
+				s.ErrCh <- err
+				return
+			}
+			s.UpdateCh <- recv
+		}
+	}
+}
+
+func (gc *GeyserClient) GetBlockHeight(
 	ctx context.Context,
 	commitment *pb.CommitmentLevel,
 ) (*pb.GetBlockHeightResponse, error) {
@@ -60,15 +102,7 @@ func (gc *YellowstoneGeyserClient) GetBlockHeight(
 	})
 }
 
-// GetLatestBlockhash retrieves the latest blockhash from the Geyser service.
-//
-// Parameters:
-// - ctx: The context for managing the request lifecycle.
-// - commitment: The commitment level to use for the request.
-//
-// Returns:
-// - The response containing the latest blockhash, or an error if the request fails.
-func (gc *YellowstoneGeyserClient) GetLatestBlockhash(
+func (gc *GeyserClient) GetLatestBlockhash(
 	ctx context.Context,
 	commitment *pb.CommitmentLevel,
 ) (*pb.GetLatestBlockhashResponse, error) {
@@ -77,15 +111,7 @@ func (gc *YellowstoneGeyserClient) GetLatestBlockhash(
 	})
 }
 
-// GetSlot retrieves the current slot number from the Geyser service.
-//
-// Parameters:
-// - ctx: The context for managing the request lifecycle.
-// - commitment: The commitment level to use for the request.
-//
-// Returns:
-// - The response containing the current slot number, or an error if the request fails.
-func (gc *YellowstoneGeyserClient) GetSlot(
+func (gc *GeyserClient) GetSlot(
 	ctx context.Context,
 	commitment *pb.CommitmentLevel,
 ) (*pb.GetSlotResponse, error) {
@@ -94,29 +120,13 @@ func (gc *YellowstoneGeyserClient) GetSlot(
 	})
 }
 
-// GetVersion retrieves the current version of the Geyser service.
-//
-// Parameters:
-// - ctx: The context for managing the request lifecycle.
-//
-// Returns:
-// - The response containing the version information, or an error if the request fails.
-func (gc *YellowstoneGeyserClient) GetVersion(
+func (gc *GeyserClient) GetVersion(
 	ctx context.Context,
 ) (*pb.GetVersionResponse, error) {
 	return gc.Client.GetVersion(ctx, &pb.GetVersionRequest{})
 }
 
-// IsBlockhashValid checks whether a given blockhash is valid according to the Geyser service.
-//
-// Parameters:
-// - ctx: The context for managing the request lifecycle.
-// - blockhash: The blockhash to validate.
-// - commitment: The commitment level to use for the request.
-//
-// Returns:
-// - The response indicating the validity of the blockhash, or an error if the request fails.
-func (gc *YellowstoneGeyserClient) IsBlockhashValid(
+func (gc *GeyserClient) IsBlockhashValid(
 	ctx context.Context,
 	blockhash string,
 	commitment *pb.CommitmentLevel,
@@ -127,172 +137,113 @@ func (gc *YellowstoneGeyserClient) IsBlockhashValid(
 	})
 }
 
-// Ping sends a ping request to the Geyser service.
-//
-// Parameters:
-// - ctx: The context for managing the request lifecycle.
-// - count: The number of ping requests to send.
-//
-// Returns:
-// - The response containing the pong result, or an error if the request fails.
-func (gc *YellowstoneGeyserClient) Ping(
+func (gc *GeyserClient) Ping(
 	ctx context.Context,
 	count int32,
 ) (*pb.PongResponse, error) {
 	return gc.Client.Ping(ctx, &pb.PingRequest{Count: count})
 }
 
-// Subscribe sets up a subscription with the Geyser service to receive real-time updates.
-//
-// Parameters:
-// - ctx: The context for managing the subscription lifecycle.
-// - token: Optional authentication token for the subscription.
-// - jsonInput: Optional JSON input for customizing the subscription request.
-// - slots: If true, subscribe to slot updates.
-// - blocks: If true, subscribe to block updates.
-// - blocksMeta: If true, subscribe to block metadata updates.
-// - signature: Optional signature to subscribe to specific transaction updates.
-// - accounts: If true, subscribe to account updates.
-// - transactions: If true, subscribe to transaction updates.
-// - voteTransactions: If true, include vote transactions in the subscription.
-// - failedTransactions: If true, include failed transactions in the subscription.
-// - accountsFilter: List of public keys to filter account updates by account addresses.
-// - accountOwnersFilter: List of public keys to filter account updates by account owners.
-// - transactionsAccountsInclude: List of public keys to include in transaction updates.
-// - transactionsAccountsExclude: List of public keys to exclude from transaction updates.
-//
-// Returns:
-// - A gRPC client stream for receiving subscription updates, or an error if the subscription fails.
-func (gc *YellowstoneGeyserClient) Subscribe(
-	ctx context.Context,
-	token *string,
-	jsonInput *string,
-	slots bool,
-	blocks bool,
-	blocksMeta bool,
-	signature *solana.Signature,
-	accounts bool,
-	transactions bool,
-	voteTransactions bool,
-	failedTransactions bool,
-	accountsFilter []solana.PublicKey,
-	accountOwnersFilter []solana.PublicKey,
-	transactionsAccountsInclude []solana.PublicKey,
-	transactionsAccountsExclude []solana.PublicKey,
-) error {
-	// Create an empty subscription request.
-	var subscription pb.SubscribeRequest
+func (c *GeyserClient) SetDefaultSubscribeClient(client pb.Geyser_SubscribeClient) *GeyserClient {
+	c.DefaultStreamClient.SubscribeClient = client
+	return c
+}
 
-	// Convert public keys to string format for filtering.
-	stringAccountsFilter := pkg.ConvertBatchPublicKeyToString(accountsFilter)
-	stringAccountOwnersFilter := pkg.ConvertBatchPublicKeyToString(accountOwnersFilter)
-	stringTransactionsAccountsInclude := pkg.ConvertBatchPublicKeyToString(transactionsAccountsInclude)
-	stringTransactionsAccountsExclude := pkg.ConvertBatchPublicKeyToString(transactionsAccountsExclude)
+func (s *StreamClient) SubscribeAccounts(filterName string, req *pb.SubscribeRequestFilterAccounts) error {
+	s.SubscribeRequest.Accounts[filterName] = req
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// If JSON input is provided, unmarshal it into the subscription request.
-	if jsonInput != nil && *jsonInput != "" {
-		jsonData := []byte(*jsonInput)
-		err := json.Unmarshal(jsonData, &subscription)
-		if err != nil {
-			return err
-		}
-	} else {
-		// If no JSON is provided, start with an empty subscription.
-		subscription = pb.SubscribeRequest{}
+func (s *StreamClient) AppendAccounts(filterName string, accounts ...string) error {
+	s.SubscribeRequest.Accounts[filterName].Account = append(s.SubscribeRequest.Accounts[filterName].Account, accounts...)
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
+
+func (s *StreamClient) UnsubscribeAccountsByID(filterName string) error {
+	delete(s.SubscribeRequest.Accounts, filterName)
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
+
+func (s *StreamClient) UnsubscribeAccounts(filterName string, accounts ...string) error {
+	for _, account := range accounts {
+		s.SubscribeRequest.Accounts[filterName].Account = slices.DeleteFunc(s.SubscribeRequest.Accounts[filterName].Account, func(a string) bool {
+			return a == account
+		})
 	}
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// Configure slot subscription if requested.
-	if slots {
-		if subscription.Slots == nil {
-			subscription.Slots = make(map[string]*pb.SubscribeRequestFilterSlots)
-		}
-		subscription.Slots["slots"] = &pb.SubscribeRequestFilterSlots{}
-	}
+func (s *StreamClient) UnsubscribeAllAccounts(filterName string) error {
+	delete(s.SubscribeRequest.Accounts, filterName)
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// Configure block subscription if requested.
-	if blocks {
-		if subscription.Blocks == nil {
-			subscription.Blocks = make(map[string]*pb.SubscribeRequestFilterBlocks)
-		}
-		subscription.Blocks["blocks"] = &pb.SubscribeRequestFilterBlocks{}
-	}
+func (s *StreamClient) SubscribeSlots(filterName string, req *pb.SubscribeRequestFilterSlots) error {
+	s.SubscribeRequest.Slots[filterName] = req
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// Configure block metadata subscription if requested.
-	if blocksMeta {
-		if subscription.BlocksMeta == nil {
-			subscription.BlocksMeta = make(map[string]*pb.SubscribeRequestFilterBlocksMeta)
-		}
-		subscription.BlocksMeta["block_meta"] = &pb.SubscribeRequestFilterBlocksMeta{}
-	}
+func (s *StreamClient) UnsubscribeSlots(filterName string) error {
+	delete(s.SubscribeRequest.Slots, filterName)
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// Configure account subscription if filters are provided or accounts subscription is requested.
-	if (len(accountsFilter)+len(accountOwnersFilter)) > 0 || accounts {
-		if subscription.Accounts == nil {
-			subscription.Accounts = make(map[string]*pb.SubscribeRequestFilterAccounts)
-		}
-		subscription.Accounts["account_sub"] = &pb.SubscribeRequestFilterAccounts{}
+func (s *StreamClient) SubscribeTransaction(filterName string, req *pb.SubscribeRequestFilterTransactions) error {
+	s.SubscribeRequest.Transactions[filterName] = req
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-		// Apply account address filters.
-		if len(accountsFilter) > 0 {
-			subscription.Accounts["account_sub"].Account = stringAccountsFilter
-		}
+func (s *StreamClient) UnsubscribeTransaction(filterName string) error {
+	delete(s.SubscribeRequest.Transactions, filterName)
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-		// Apply account owner filters.
-		if len(accountOwnersFilter) > 0 {
-			subscription.Accounts["account_sub"].Owner = stringAccountOwnersFilter
-		}
-	}
+func (s *StreamClient) SubscribeTransactionStatus(filterName string, req *pb.SubscribeRequestFilterTransactions) error {
+	s.SubscribeRequest.TransactionsStatus[filterName] = req
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// Configure transaction subscription.
-	if subscription.Transactions == nil {
-		subscription.Transactions = make(map[string]*pb.SubscribeRequestFilterTransactions)
-	}
+func (s *StreamClient) UnsubscribeTransactionStatus(filterName string) error {
+	delete(s.SubscribeRequest.TransactionsStatus, filterName)
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// If a specific signature is provided, subscribe to the corresponding transaction.
-	if signature != nil {
-		tr := true
-		subscription.Transactions["signature_sub"] = &pb.SubscribeRequestFilterTransactions{
-			Failed: &tr,
-			Vote:   &tr,
-		}
-		cSignature := signature.String()
-		subscription.Transactions["signature_sub"].Signature = &cSignature
-	}
+func (s *StreamClient) SubscribeBlocks(filterName string, req *pb.SubscribeRequestFilterBlocks) error {
+	s.SubscribeRequest.Blocks[filterName] = req
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// Subscribe to generic transaction streams if requested.
-	if transactions {
-		subscription.Transactions["transactions_sub"] = &pb.SubscribeRequestFilterTransactions{
-			Failed: &failedTransactions,
-			Vote:   &voteTransactions,
-		}
+func (s *StreamClient) UnsubscribeBlocks(filterName string) error {
+	delete(s.SubscribeRequest.Blocks, filterName)
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-		// Apply inclusion and exclusion filters for transactions.
-		subscription.Transactions["transactions_sub"].AccountInclude = stringTransactionsAccountsInclude
-		subscription.Transactions["transactions_sub"].AccountExclude = stringTransactionsAccountsExclude
-	}
+func (s *StreamClient) SubscribeBlocksMeta(filterName string, req *pb.SubscribeRequestFilterBlocksMeta) error {
+	s.SubscribeRequest.BlocksMeta[filterName] = req
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// Set up the subscription request context with the provided token if available.
-	if token != nil && *token != "" {
-		md := metadata.New(map[string]string{"x-token": *token})
-		ctx = metadata.NewOutgoingContext(ctx, md)
-	}
+func (s *StreamClient) UnsubscribeBlocksMeta(filterName string) error {
+	delete(s.SubscribeRequest.BlocksMeta, filterName)
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// Open a gRPC stream for the subscription.
-	stream, err := gc.Client.Subscribe(ctx)
-	if err != nil {
-		return err
-	}
+func (s *StreamClient) SubscribeEntry(filterName string, req *pb.SubscribeRequestFilterEntry) error {
+	s.SubscribeRequest.Entry[filterName] = req
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// Send the subscription request to the server.
-	err = stream.Send(&subscription)
-	if err != nil {
-		return err
-	}
+func (s *StreamClient) UnsubscribeEntry(filterName string) error {
+	delete(s.SubscribeRequest.Entry, filterName)
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// Store the subscription request in the client.
-	gc.Stream = &stream
-	gc.StreamSubscription = &subscription
+func (s *StreamClient) SubscribeAccountDataSlice(req []*pb.SubscribeRequestAccountsDataSlice) error {
+	s.SubscribeRequest.AccountsDataSlice = req
+	return s.SubscribeClient.Send(s.SubscribeRequest)
+}
 
-	// Return the stream for receiving updates.
-	return nil
+func (s *StreamClient) UnsubscribeAccountDataSlice() error {
+	s.SubscribeRequest.AccountsDataSlice = nil
+	return s.SubscribeClient.Send(s.SubscribeRequest)
 }
