@@ -86,9 +86,9 @@ func (s *StreamClient) listen() {
 			recv, err := s.SubscribeClient.Recv()
 			if err != nil {
 				s.ErrCh <- err
-				return
+			} else {
+				s.UpdateCh <- recv
 			}
-			s.UpdateCh <- recv
 		}
 	}
 }
