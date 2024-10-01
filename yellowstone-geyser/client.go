@@ -27,7 +27,7 @@ func NewClient(
 		return nil, fmt.Errorf("failed to create Geyser Client")
 	}
 
-	subscribe, err := geyserClient.Subscribe(ctx, grpc.MaxCallRecvMsgSize(16*1024*1024), grpc.MaxCallSendMsgSize(16*1024*1024))
+	subscribe, err := geyserClient.Subscribe(ctx)
 	if err != nil {
 		return nil, err
 	}
