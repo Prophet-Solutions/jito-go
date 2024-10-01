@@ -40,7 +40,7 @@ func NewClient(
 		DefaultStreamClient: &StreamClient{
 			SubscribeClient: subscribe,
 			Ctx:             ctx,
-			UpdateCh:        make(chan *pb.SubscribeUpdate, 100),
+			UpdateCh:        make(chan *pb.SubscribeUpdate), // Unbuffered channel to prevent overflowing
 			ErrCh:           make(chan error, 10),
 		},
 		ErrCh: make(chan error, 10),
@@ -66,8 +66,8 @@ func (c *GeyserClient) NewSubscribeClient(ctx context.Context, clientName string
 			Entry:              make(map[string]*pb.SubscribeRequestFilterEntry),
 			AccountsDataSlice:  make([]*pb.SubscribeRequestAccountsDataSlice, 0),
 		},
-		UpdateCh: make(chan *pb.SubscribeUpdate, 100), // Buffer channel for better performance
-		ErrCh:    make(chan error, 10),                // Buffer error channel
+		UpdateCh: make(chan *pb.SubscribeUpdate), // Unbuffered channel to prevent overflowing
+		ErrCh:    make(chan error, 10),
 	}
 
 	c.Streams.Store(clientName, streamClient)
