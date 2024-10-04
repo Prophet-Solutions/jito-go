@@ -47,8 +47,8 @@ func NewClient(
 	}, nil
 }
 
-func (c *GeyserClient) NewSubscribeClient(ctx context.Context, clientName string) error {
-	stream, err := c.Client.Subscribe(ctx)
+func (c *GeyserClient) NewSubscribeClient(ctx context.Context, clientName string, opts ...grpc.CallOption) error {
+	stream, err := c.Client.Subscribe(ctx, opts...)
 	if err != nil {
 		return err
 	}
